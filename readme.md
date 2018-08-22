@@ -1,4 +1,4 @@
-# Effecient R
+# Effeient R
 YCRC Bootcamp: Writing Efficient R Code is a ~2 hour intermediate course on writing efficient R code. This course is taught by Steve Weston (@steveweston) and Ben Evans (@brevans).
 
 
