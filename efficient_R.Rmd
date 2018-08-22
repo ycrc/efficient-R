@@ -62,17 +62,6 @@ Python you send these to conda or pypi. R to cran, bioconductor, or github and d
 * Slow programs often a result of bad programming practices or not understanding how R works
 * There are various options for calling C or C++ functions from R
 
-<div class="notes">
-experiments are relatively fast to prototype and compare in interactive languages like R & Python
-
-R documentation is terse and dense, but useful if you stick with it
-
-Structured programming / functions are easier to isolate, benchmark and refactor
-
-tracking changes, even with file sync service like dropbox can really save you time
-
-</div>
-
 ## R performance before you start | *Premature optimization is the root of all evil* -- Donald Knuth
 
 * Become familiar with R's vector and apply functions
@@ -321,8 +310,8 @@ R makes it easy to read entire data sets in one operation, but reading it in par
 ## Beware of `read.table`
 The `read.table` function is commonly used for reading data files, but it can be very slow on large files
 
-* Use of the colClasses argument can improve performance
-* colClasses can be used to skip a column, using less memory
+* Use of the `colClasses` argument can improve performance
+* `colClasses` can be used to skip a column, using less memory
 * It can be faster to read a file in smaller chunks using the `nrows` argument
 * The `scan` function can be faster
 * Consider using similar functions from different packages, such as `data.table`, `sqldf`, and `bigmemory`
@@ -331,19 +320,21 @@ The `read.table` function is commonly used for reading data files, but it can be
 ### `bigmemory`
 * Defines mutable matrix objects that aren't automatically duplicated
 * works very well in conjunction with parallel computing
+
 ### `big.matrix`
 * can use a backing file that is memory mapped
-### biganalytics
+
+### `biganalytics`
 * `apply`, `biglm`, `bigglm`, `bigkmeans`, `colmax`
+
 ### `bigtabulate`
 * `bigsplit`, `bigtabulate`, `bigtable`, `bigtsummary`
-### `synchronicity`
-* `boost.mutex`, `lock`, `unlock`
+
 <div class="notes">
 bigmemory written here by Mike Kane and Jay Emerson
 </div>
 
-## Save data in binary format}
+## Save data in binary format
   Saving data in a binary format can make it much faster to read
   the data later.  There are a variety of functions available to do that:
 
@@ -435,17 +426,27 @@ Knowing where code is slow via profiling, use benchmarking tools
 * `system.time` is useful for long running code
 * `microbenchmark` package is useful for analyzing short running code
 
-# Loops | *Wherefore art thou performant or not?*
+<div class="notes">
+up next - Benchmarking loops and vector functions
+</div>
+
+# Loops | *Wherefore art thou performant... or not?*
 ## Are for loops in R slow?
 
 * Not all for loops are bad
 * Most common mistakes involve for loops. 
 * The classic mistake is not preallocating a result vector.
 
+<div class="notes">
+Source code for R is filled with for loops
+
+If the loop accounts for a small fraction of the total execution time, who cares?
+</div>
+
 ## Example 1
 Create a vector of length `n` where all values are `x`
 
-## A bad for loop
+## Example 1: a bad for loop
 ```{r}
 bad.for <- function(n,x) {
   result <- NULL
@@ -460,7 +461,7 @@ bad.for <- function(n,x) {
   - Item result vector is reallocated and copied on each iteration
   - Triggering garbage collection periodically
 
-## A better for loop
+## Example 1: a better for loop
 ```{r}
 okay.for <- function(n,x) {
   result <- double(n)
@@ -476,7 +477,7 @@ Improvement over the previous example, but it's still slow because of the many t
 reminiscent of a compiled language like C, we pre-allocate memory of the shape we expect to fill
 </div>
 
-## A puzzle loop
+## Example 1: a puzzle loop
 
 ```{r}
 strange.for <- function(n, x) {
@@ -489,7 +490,7 @@ strange.for <- function(n, x) {
 ```
 Is this loop faster or slower than the previous two?
 
-## Using a vector function
+## Example 1: using a vector function
 ```{r}
 # use of vector assignment
 vector.assn <- function(n, x) {
@@ -500,7 +501,7 @@ vector.assn <- function(n, x) {
 ```
 We can also use vector assignment
 
-## Using R built-in function
+## Example 1: using R built-in function
 
 ```{r}
 built.in <- function(n, x) {
@@ -509,7 +510,7 @@ built.in <- function(n, x) {
 ```
 Or, we could read the fine manual and [use a built-in function](https://cran.r-project.org/doc/manuals/r-release/R-intro.html#Generating-regular-sequences)
 
-## Loop testing | Make sure they produce identical output
+## Example 1: testing | Make sure functions produce identical output
 ```{r}
 n <- 10000
 x <- 7
@@ -524,14 +525,14 @@ identical(bad.result, vector.result),
 identical(bad.result, built.result))
 ```
 
-## Loops benchmark results
+## Example 1: benchmark results
 ```{r results='asis'}
 res <- microbenchmark(bad=bad.for(n,x), okay=okay.for(n,x), strange=strange.for(n,x),
                       vector=vector.assn(n,x), builtin=built.in(n,x))
 kable(summary(res, unit="relative"))
 ```
 
-## Loops benchmark plot
+## Example 1: benchmark plot
 ```{r message=FALSE}
 autoplot(res)
 ```
@@ -541,7 +542,7 @@ Create a matrix with `n` rows and `x` columns
 
 Each value in the matrix is sampled from normal distribution, $\mu=0 , \sigma=1$
 
-## Another bad for loop
+## Example 2: another bad for loop
 Generate a matrix of values sampled from normal distribution
 `n` rows, `x` columns
 ```{r}
@@ -559,7 +560,7 @@ Take a sequence of vector, matrix or data-frame arguments and combine by columns
 Random generation for the normal distribution with mean equal 0, standard deviation equal to 1.
 </div>
 
-## Preallocation of result vector
+## Example 2: preallocation of result vector
 Just like before, we build a matrix and populate it with a for loop
 ```{r}
 ok.norm <- function(n,x) {
@@ -571,14 +572,15 @@ ok.norm <- function(n,x) {
 }
 ```
 
-## Use lapply and rbind (don't need to preallocate matrix)
+## Example 2: use lapply and rbind
+### don't need to preallocate matrix
 ```{r}
 lapply.norm <- function(n,x) {
   do.call('rbind', lapply(1:n, function(i) rnorm(x)))
 }
 ```
 
-## Compute all rows at once
+## Example 2: Compute all rows at once
 ```{r}
 best.norm <- function(n,x) {
   m <- rnorm(x * n)
@@ -588,7 +590,7 @@ best.norm <- function(n,x) {
 ```
 
 
-## Generate test data
+## Example 2: Test data
 ```{r}
 n <- 600
 x <- 100
@@ -603,14 +605,14 @@ identical(bad.result, lapply.result),
 identical(bad.result, best.result))
 ```
 
-## Run benchmarks
+## Example 2: benchmarks
 ```{r results='asis'}
 res <- microbenchmark(bad=bad.norm(n,x), ok=ok.norm(n,x),
                         lapply=lapply.norm(n,x), best=best.norm(n,x))
 kable(summary(res, unit="relative"))
 ```
 
-## Matrix generation benchmark plot
+## Example 2: benchmark plot
 ```{r message=FALSE}
 autoplot(res)
 ```
