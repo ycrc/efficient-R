@@ -1,0 +1,676 @@
+---
+title: "Writing Efficient R Code"
+author: "Ben Evans & Stephen Weston"
+date: "August 22, 2018"
+output:
+  ioslides_presentation:
+    css: styles.css
+    logo: logo.png
+    widescreen: yes
+    transition: faster
+  slidy_presentation: default
+  beamer_presentation: default
+institute: YCRC
+---
+
+```{r setup, echo=FALSE}     
+library("knitr")
+library("microbenchmark")
+library("ggplot2")
+library("profvis")
+library("compiler")
+opts_chunk$set(comment='', warning=FALSE)
+```
+
+## Outline | What we'll cover today
+  
+* Intro & general tips
+* R performance tips: patterns to use and avoid
+* Vectors & Matrices
+* Memory management, large tables
+* Profiling and Benchmarking
+* Loops
+
+  
+## General advice
+
+* If you don't understand something, try some experiments
+* Browse the documentation, learn its jargon and quirks
+* Break your code into functions when appropriate
+* Use functions to reduce the need for global variables
+* Write tests for your functions
+* Use `git` to keep track of changes
+* Learn to distribute your code as a package 
+
+<div class="notes">
+Experiments are relatively fast to prototype and compare in interactive languages like R & Python
+
+R documentation is terse, dense, franky ugly but useful if you stick with it
+
+Structured programming / functions are easier to test, benchmark and refactor
+
+Tracking changes, even with file sync service like dropbox can really save you time
+
+Python you send these to conda or pypi. R to cran, bioconductor, or github and devtools
+</div>
+
+# Is R slow?
+## Is R slow? | Sometimes, but well written R programs are usually fast enough.
+
+* Designed to make programming easier
+    + Speed was *not* the primary design criteria
+* Slow programs often a result of bad programming practices or not understanding how R works
+* There are various options for calling C or C++ functions from R
+
+<div class="notes">
+experiments are relatively fast to prototype and compare in interactive languages like R & Python
+
+R documentation is terse and dense, but useful if you stick with it
+
+Structured programming / functions are easier to isolate, benchmark and refactor
+
+tracking changes, even with file sync service like dropbox can really save you time
+
+</div>
+
+## R performance before you start | *Premature optimization is the root of all evil* -- Donald Knuth
+
+* Become familiar with R's vector and apply functions
+* Consider specialized performance packages
+  * E.g. `data.table`, `bigmemory`, `plyr`, `RSQLite`, `snow`, `multicore`, `parallel`
+* Don't use an R GUI when performance is important
+
+<div class="notes">
+Bear in mind your research goals, don't lose sight of the forest for the trees
+
+Don't reinvent the wheel
+
+Gui takes up memory, introduces latency over network if x11 forwarding
+
+</div>
+
+## R tuning advice 
+
+* Be methodical but don't get carried away with micro-optimizations
+* Use monitoring tools such as `top`, Activity Monitor, Task Manage
+* Use vector functions
+* Avoid duplication of objects
+* Pre-allocate result vectors
+* Profile your code and run benchmarks
+* Byte-compile with `cmpfun`, or call a compiled language (e.g. C, C++)
+
+<div class="notes">
+We'll cover some profiling and benchmark techniques
+
+Making copies of your data over and over again is expensive, can tank performance
+
+R includes a JIT compiler, can speed things up, distributed packages are often already JIT
+
+In my hands the JIT compiler hasn't shown much difference
+
+up next - Vectors & Matrices
+</div>
+
+# Vectors & Matrices
+## Vectors are central to good R programming
+* Fast, since implemented as a single C or Fortran function
+* Concise and easy to read
+* Can often replace for loops
+* **However**, heavy use can result in high memory usage
+
+<div class="notes">
+important feature of the language right from beginning
+
+aren't really scalars, they're just vectors of length 1
+</div>
+
+## Useful vector functions
+* math operators: `+`, `-`, `*`, `/`, `^`, `%/%`, `%%`
+* math functions: `abs`, `sqrt`, `exp`, `log`, `log10`, `cos`, `sin`, `tan`, `sum`, `prod`
+* logical operators: `&`, `|`, `!`
+* relational operators: `==`, `!=`, `<`, `>`, `<=`, `>=`
+* string functions: `nchar`, `tolower`, `toupper`, `grep`, `sub`, `gsub`, `strsplit`
+* conditional function: `ifelse` (pure R code)
+* misc: `which`, `which.min`, `which.max`, `pmax`, `pmin`, `is.na`, `any`, `all`, `rnorm`, `runif`, `sprintf`, `rev`, `paste`, `as.integer`, `as.character`
+
+<div class="notes">
+abs value of vector, pass to sqrt -> can nest functions and avoid looping
+
+sometimes you can segment vectors to save memory
+
+single logical operators are vector, double are used in if statements
+
+nchar function - generate a length vector, length(c("hello")) == 1
+
+grep for searching sub and gsub for substituting strings
+
+ifelse can return vector based on logical vector
+
+sprintf is useful for building formatted vectors of strings
+</div>
+
+## Dynamic features of vectors
+### initialize `x` and fill it with zeros
+```{r}
+n <- 10
+x <- double(n)
+x
+```
+
+### Extend `x` by assignment
+```{r}
+x[15] <- 100
+x
+```
+
+## Dynamic features of vectors
+### Resize/truncate `x`
+```{r}
+length(x) <- 5
+x
+```
+
+### rnorm vector function
+```{r}
+x <- rnorm(10)
+x
+```
+
+## Vector indexing
+### Extract subvector
+```{r}
+x[3:6]
+```
+
+### Extract elements using result of vector relational operation
+```{r}
+x[x > 0]
+```
+
+## Vector indexing
+### You can also use an index to assign values
+```{r}
+x[is.na(x)] <- 0
+```
+
+## Matrix indexing
+### Make a new matrix
+```{r}
+m <- matrix(rnorm(100), 10, 10)
+```
+
+### Extract 2X3 submatrix (non-consecutive columns)
+```{r}
+m[3:4, c(5,7,9)]
+```
+<div class="notes">
+index with two vectors
+</div>
+
+## Matrix indexing
+### Extract arbitrary elements as vector
+```{r}
+m[cbind(3:6, c(2,4,6,9))]
+```
+<div class="notes">
+index matrix is 2xn, with coordinates of values to extract
+</div>
+
+### Extract elements using result of vector relational operation
+```{r}
+head(m[m > 0])
+
+```
+
+## Matrix indexing
+### You can also use a matrix index to assign values
+```{r}
+m[is.na(m)] <- 0
+
+```
+<div class="notes">
+up next Memory Considerations
+</div>
+
+# Memory Considerations
+## Memory in R
+
+* Avoid duplicating objects, especially big ones or those in loops
+* Look into memory effecient libraries
+* Look into other formats to store data
+
+## Beware of object duplication
+![](ei9o1jpbyeh11.gif)
+
+<br>
+
+* R uses *pass by value* semantics for function arguments
+* In general, this requires making copies of objects
+    + Functions must return modified object
+* R tries to avoid copying unless necessary
+
+<div class="notes">
+as opposed to pass by reference in C: functions can modify the matrix passed in directly
+
+treats vecors and matrices as immutable
+
+safe is better than effecient
+</div>
+
+## Example of object duplication
+`tracemem` reports when an object is duplicated, which is very useful for debugging performance problems.
+
+In this example, object duplication is expected and helpful.
+
+```{r}
+x <- double(10)
+tracemem(x)
+y <- x
+y[1] <- 10
+```
+
+## Example of object duplication
+```{r}
+.Internal(inspect(x))
+.Internal(inspect(y))
+x[1] <- 50
+```
+
+<div class="notes">
+tracemem reports addresses of objects when they change
+
+NAM value == "named"
+
+NAM value of 1 means this object can be changed without duplication
+
+NAM value of 2 means there are 2 references to this object
+
+old values eventually garbage collected
+</div>
+
+## Example of unexpected object duplication | Passing matrix to non-primitive function such as `nrow` poisons for duplication
+
+```{r eval=FALSE}
+> m <- matrix(0, 3, 3)
+> tracemem(m)
+[1] "<0x7fc168d29df0>"
+> m[1,1] <- 1
+> nrow(m)
+[1] 3
+> m[1,1] <- 2
+tracemem[0x7fc168d29df0 -> 0x7fc168d21f58]:
+```
+<div class="notes">
+primative function - purely calls C no R allowed
+
+non-primative function - allowed to call R first, e.g check arguments
+
+sets NAMED bit
+
+next modification results in duplication
+</div>
+
+## Splitting problem into smaller tasks
+R makes it easy to read entire data sets in one operation, but reading it in parts can be much more efficient.
+
+* Splitting the problem into smaller tasks is compatible with parallel computing techniques
+* The `foreach` & `iterators` packages provide tools to split inputs into smaller pieces
+* Use Linux commands (`split`, `awk`, etc) or other languages (e.g. Python to preprocess
+    + Split data files and remove unneeded fields
+
+## Beware of `read.table`
+The `read.table` function is commonly used for reading data files, but it can be very slow on large files
+
+* Use of the colClasses argument can improve performance
+* colClasses can be used to skip a column, using less memory
+* It can be faster to read a file in smaller chunks using the `nrows` argument
+* The `scan` function can be faster
+* Consider using similar functions from different packages, such as `data.table`, `sqldf`, and `bigmemory`
+
+## Good alternative libraries
+### `bigmemory`
+* Defines mutable matrix objects that aren't automatically duplicated
+* works very well in conjunction with parallel computing
+### `big.matrix`
+* can use a backing file that is memory mapped
+### biganalytics
+* `apply`, `biglm`, `bigglm`, `bigkmeans`, `colmax`
+### `bigtabulate`
+* `bigsplit`, `bigtabulate`, `bigtable`, `bigtsummary`
+### `synchronicity`
+* `boost.mutex`, `lock`, `unlock`
+<div class="notes">
+bigmemory written here by Mike Kane and Jay Emerson
+</div>
+
+## Save data in binary format}
+  Saving data in a binary format can make it much faster to read
+  the data later.  There are a variety of functions available to do that:
+
+* `save`/`load`
+* `writeBin`/`readBin`
+* `write.big.matrix`/`read.big.matrix` (from `bigmemory`)
+
+## SQLite in R
+Consider putting data into an SQLite database.
+
+* `RSQLite` package is easy to use
+* Easy to get subsets of the data into a data frame
+* Command line tool very useful for experimenting with queries
+* Database can be accessed from many different languages
+* The `sqldf` package may be useful also
+* Can be quite slow
+
+<div class="notes">
+if data is far too large
+
+if interoperability with other languages or tools needed
+
+up next - Profiling and Benchmarking
+</div>
+
+# Profiling and Benchmarking | Find your marble, then start chiseling
+## Profiling vs Benchmarking
+### Profiling
+* If you've decided you need your code to perform better, *profile first*
+* Profiling helps isolate hot spots
+* Time spent here will likely yeild best ROI
+
+### Benchmarking
+* With hot spots in hand, examine the code and propose alternatives
+* While ensuring the reesults are the same, ask which performs best
+
+# Profiling
+## R profiling tools
+R has builtin support for profiling, but there are additional
+
+packages available:
+
+* `proftools`
+* `profvis` (RStudio integration)
+
+## Basic profiling with `proftools`
+```{r}
+f <- function(a) { g1(a) + g2(2 * a) }
+
+g1 <- function(a) { h(a) }
+
+g2 <- function(a) { sqrt(a) }
+
+h <- function(a) {
+  b <- double(length(a))
+  for (i in seq_along(a)) {
+    b[i] <- sqrt(a[i])
+  }
+  b
+}
+```
+
+## Basic profiling with `proftools`
+```{r}
+x <- 1:1000000
+Rprof('prof.out')
+for (i in 1:10) {
+  y <- f(x)
+}
+Rprof(NULL)
+summaryRprof("prof.out")$by.self
+```
+
+## Basic profiling with `profvis`
+### Can also do this in RStudio, e.g. Profile -> Start Profile
+```{r}
+profvis({
+for (i in 1:10) {
+  y <- f(x)
+}
+})
+```
+
+## Benchmarking
+Knowing where code is slow via profiling, use benchmarking tools
+
+* Put problem code into a functions 
+* Benchmark different versions of code for comparison
+* `system.time` is useful for long running code
+* `microbenchmark` package is useful for analyzing short running code
+
+# Loops | *Wherefore art thou performant or not?*
+## Are for loops in R slow?
+
+* Not all for loops are bad
+* Most common mistakes involve for loops. 
+* The classic mistake is not preallocating a result vector.
+
+## Example 1
+Create a vector of length `n` where all values are `x`
+
+## A bad for loop
+```{r}
+bad.for <- function(n,x) {
+  result <- NULL
+  for (i in 1:n) {
+    result[i] <- x
+  }
+  result
+}
+```
+  - Large number of iterations
+  - Tiny amount of computation per iteration
+  - Item result vector is reallocated and copied on each iteration
+  - Triggering garbage collection periodically
+
+## A better for loop
+```{r}
+okay.for <- function(n,x) {
+  result <- double(n)
+  for (i in 1:n) {
+    result[i] <- x
+  }
+  result
+}
+```
+Improvement over the previous example, but it's still slow because of the many tiny iterations.
+
+<div class="notes">
+reminiscent of a compiled language like C, we pre-allocate memory of the shape we expect to fill
+</div>
+
+## A puzzle loop
+
+```{r}
+strange.for <- function(n, x) {
+  result <- NULL
+  for (i in n:1) {
+    result[i] <- x
+  }
+  result
+}
+```
+Is this loop faster or slower than the previous two?
+
+## Using a vector function
+```{r}
+# use of vector assignment
+vector.assn <- function(n, x) {
+  result <- double(n)
+  result[] <- x
+  result
+}
+```
+We can also use vector assignment
+
+## Using R built-in function
+
+```{r}
+built.in <- function(n, x) {
+  rep(x, n)
+}
+```
+Or, we could read the fine manual and [use a built-in function](https://cran.r-project.org/doc/manuals/r-release/R-intro.html#Generating-regular-sequences)
+
+## Loop testing | Make sure they produce identical output
+```{r}
+n <- 10000
+x <- 7
+bad.result        <- bad.for(n, x)
+okay.result       <- okay.for(n, x)
+strange.result    <- strange.for(n, x)
+vector.result     <- vector.assn(n, x)
+built.result      <- built.in(n, x)
+c(identical(bad.result, okay.result),
+identical(bad.result, strange.result),
+identical(bad.result, vector.result),
+identical(bad.result, built.result))
+```
+
+## Loops benchmark results
+```{r results='asis'}
+res <- microbenchmark(bad=bad.for(n,x), okay=okay.for(n,x), strange=strange.for(n,x),
+                      vector=vector.assn(n,x), builtin=built.in(n,x))
+kable(summary(res, unit="relative"))
+```
+
+## Loops benchmark plot
+```{r message=FALSE}
+autoplot(res)
+```
+
+## Example 2
+Create a matrix with `n` rows and `x` columns 
+
+Each value in the matrix is sampled from normal distribution, $\mu=0 , \sigma=1$
+
+## Another bad for loop
+Generate a matrix of values sampled from normal distribution
+`n` rows, `x` columns
+```{r}
+bad.norm <- function(n,x) {
+  m <- NULL
+  for (i in 1:n) {
+    m <- rbind(m, rnorm(x))
+  }
+  m
+}
+```
+<div class="notes">
+Take a sequence of vector, matrix or data-frame arguments and combine by columns or rows, respectively.
+
+Random generation for the normal distribution with mean equal 0, standard deviation equal to 1.
+</div>
+
+## Preallocation of result vector
+Just like before, we build a matrix and populate it with a for loop
+```{r}
+ok.norm <- function(n,x) {
+  m <- matrix(0, nrow=n, ncol=x)
+  for (i in 1:n) {
+    m[i,] <- rnorm(100)
+  }
+  m
+}
+```
+
+## Use lapply and rbind (don't need to preallocate matrix)
+```{r}
+lapply.norm <- function(n,x) {
+  do.call('rbind', lapply(1:n, function(i) rnorm(x)))
+}
+```
+
+## Compute all rows at once
+```{r}
+best.norm <- function(n,x) {
+  m <- rnorm(x * n)
+  dim(m) <- c(x, n)
+  t(m)
+}
+```
+
+
+## Generate test data
+```{r}
+n <- 600
+x <- 100
+# Verify correct results
+set.seed(123); bad.result <- bad.norm(n,x)
+set.seed(123); ok.result <- ok.norm(n,x)
+set.seed(123); lapply.result <- lapply.norm(n,x)
+set.seed(123); best.result <- best.norm(n,x)
+
+c(identical(bad.result, ok.result),
+identical(bad.result, lapply.result),
+identical(bad.result, best.result))
+```
+
+## Run benchmarks
+```{r results='asis'}
+res <- microbenchmark(bad=bad.norm(n,x), ok=ok.norm(n,x),
+                        lapply=lapply.norm(n,x), best=best.norm(n,x))
+kable(summary(res, unit="relative"))
+```
+
+## Matrix generation benchmark plot
+```{r message=FALSE}
+autoplot(res)
+```
+
+## Just in Time (JIT) compiling your functions
+### Results in your function as bytecode
+```{r}
+fun.for <- function(x, seed=1423) {
+  set.seed(seed)
+  y <- double(length(x))
+  for (i in seq_along(x)) {
+    y[i] <- rnorm(1) * x[i]
+  }
+  y
+}
+fun.for.compiled <- cmpfun(fun.for)
+```
+
+## Benchmarking JIT
+```{r}
+x <- 10000
+res <- microbenchmark(fun.for=fun.for(x),
+                      fun.for.compiled=fun.for.compiled(x))
+kable(summary(res, unit="relative"))
+```
+
+## Benchmarking JIT
+```{r message=FALSE}
+autoplot(res)
+```
+<div class="notes">
+Up next - Simple parallel computing
+</div>
+
+# Simple parallel computing
+## Simple parallel computing using `mclapply`
+The standard `parallel` package includes a very useful function: `mclapply`
+
+* `mclapply` is nearly a drop-in replacement for `lapply`
+* `mc.cores` argument specifies number of workers to use
+* does not execute in parallel on Windows (depends on `fork` system call)
+* not generally safe to use in R GUIs (seems to work in RStudio)
+
+## Parallel randomForest example
+```{r eval=FALSE}
+library(parallel)
+library(randomForest)
+
+x <- matrix(runif(500), 100)
+y <- gl(2, 50)
+ntree <- 1000
+cores <- detectCores()
+vntree <- rep(ntree %/% cores, cores)
+worker <- function(n) randomForest(x, y, ntree=n)
+rf <- do.call('combine',
+              mclapply(vntree, worker, mc.cores=cores))
+```
+
+## Resources
+  - This presentation: [https://github.com/ycrc/efficient-R](https://github.com/ycrc/efficient-R)
+  - R Book: [http://adv-r.had.co.nz](http://adv-r.had.co.nz)
+  - R Manuals: [http://cran.r-project.org/manuals.html](http://cran.r-project.org/manuals.html)
+  - R Inferno: [http://www.burns-stat.com/documents/books/the-r-inferno]([http://www.burns-stat.com/documents/books/the-r-inferno])
