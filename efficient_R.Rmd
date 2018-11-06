@@ -66,7 +66,8 @@ Python you send these to conda or pypi. R to cran, bioconductor, or github and d
 
 * Become familiar with R's vector and apply functions
 * Consider specialized performance packages
-  * E.g. `data.table`, `bigmemory`, `plyr`, `RSQLite`, `snow`, `multicore`, `parallel`
+    - E.g. `data.table`, `bigmemory`, `plyr`, `RSQLite`, `snow`, `multicore`, `parallel`
+* Consider using external optimizations (OpenBLAS/MKL)
 * Don't use an R GUI when performance is important
 
 <div class="notes">
@@ -81,7 +82,7 @@ Gui takes up memory, introduces latency over network if x11 forwarding
 ## R tuning advice 
 
 * Be methodical but don't get carried away with micro-optimizations
-* Use monitoring tools such as `top`, Activity Monitor, Task Manage
+* Use monitoring tools such as `top`, Activity Monitor, Task Manager
 * Use vector functions
 * Avoid duplication of objects
 * Pre-allocate result vectors
@@ -225,7 +226,7 @@ up next Memory Considerations
 ## Memory in R
 
 * Avoid duplicating objects, especially big ones or those in loops
-* Look into memory effecient libraries
+* Look into memory efficient libraries
 * Look into other formats to store data
 
 ## Beware of object duplication
@@ -235,7 +236,7 @@ up next Memory Considerations
 
 * R uses *pass by value* semantics for function arguments
 * In general, this requires making copies of objects
-    + Functions must return modified object
+    - Functions must return modified object
 * R tries to avoid copying unless necessary
 
 <div class="notes">
@@ -357,8 +358,36 @@ if data is far too large
 
 if interoperability with other languages or tools needed
 
+</div>
+
+## Speed up your Basic Linear Algebra Subprograms
+See also: [http://brettklamer.com/diversions/statistical/faster-blas-in-r/](http://brettklamer.com/diversions/statistical/faster-blas-in-r/)
+[https://cran.r-project.org/doc/manuals/r-release/R-admin.html#BLAS](https://cran.r-project.org/doc/manuals/r-release/R-admin.html#BLAS)
+
+Intel Math Kernel Libraries (MKL) also fast, trickier to get working from scratch
+
+MacOS
+```{bash eval=FALSE}
+brew install openblas
+brew install r --with-openblas
+```
+
+Linux (Ubuntu)
+```{bash eval=FALSE}
+sudo apt-get install libopenblas-base
+```
+
+<div class="notes">
 up next - Profiling and Benchmarking
 </div>
+
+## Vanilla vs OpenBLAS
+
+My Machine: Ubuntu Bionic, i9-8950HK CPU, R 3.4.4, OpenBLAS 0.2.20
+15 tests from [http://r.research.att.com/benchmarks/R-benchmark-25.R](http://r.research.att.com/benchmarks/R-benchmark-25.R)
+
+Default R: ~29 Seconds
+R with OpenBLAS: ~3 seconds
 
 # Profiling and Benchmarking | Find your marble, then start chiseling
 ## Profiling vs Benchmarking
@@ -620,6 +649,7 @@ autoplot(res)
 ## Just in Time (JIT) compiling your functions
 ### Results in your function as bytecode
 ```{r}
+enableJIT(0)
 fun.for <- function(x, seed=1423) {
   set.seed(seed)
   y <- double(length(x))
@@ -643,36 +673,12 @@ kable(summary(res, unit="relative"))
 ```{r message=FALSE}
 autoplot(res)
 ```
-<div class="notes">
-Up next - Simple parallel computing
-</div>
 
-# Simple parallel computing
-## Simple parallel computing using `mclapply`
-The standard `parallel` package includes a very useful function: `mclapply`
-
-* `mclapply` is nearly a drop-in replacement for `lapply`
-* `mc.cores` argument specifies number of workers to use
-* does not execute in parallel on Windows (depends on `fork` system call)
-* not generally safe to use in R GUIs (seems to work in RStudio)
-
-## Parallel randomForest example
-```{r eval=FALSE}
-library(parallel)
-library(randomForest)
-
-x <- matrix(runif(500), 100)
-y <- gl(2, 50)
-ntree <- 1000
-cores <- detectCores()
-vntree <- rep(ntree %/% cores, cores)
-worker <- function(n) randomForest(x, y, ntree=n)
-rf <- do.call('combine',
-              mclapply(vntree, worker, mc.cores=cores))
-```
+# END
 
 ## Resources
   - This presentation: [https://github.com/ycrc/efficient-R](https://github.com/ycrc/efficient-R)
   - R Book: [http://adv-r.had.co.nz](http://adv-r.had.co.nz)
   - R Manuals: [http://cran.r-project.org/manuals.html](http://cran.r-project.org/manuals.html)
   - R Inferno: [http://www.burns-stat.com/documents/books/the-r-inferno]([http://www.burns-stat.com/documents/books/the-r-inferno])
+  - Efficient R programming: [https://csgillespie.github.io/efficientR/index.html](https://csgillespie.github.io/efficientR/index.html)
