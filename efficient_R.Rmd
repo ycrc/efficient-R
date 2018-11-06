@@ -377,17 +377,18 @@ Linux (Ubuntu)
 sudo apt-get install libopenblas-base
 ```
 
-<div class="notes">
-up next - Profiling and Benchmarking
-</div>
-
 ## Vanilla vs OpenBLAS
 
 My Machine: Ubuntu Bionic, i9-8950HK CPU, R 3.4.4, OpenBLAS 0.2.20
 15 tests from [http://r.research.att.com/benchmarks/R-benchmark-25.R](http://r.research.att.com/benchmarks/R-benchmark-25.R)
 
 Default R: ~29 Seconds
+
 R with OpenBLAS: ~3 seconds
+
+<div class="notes">
+up next - Profiling and Benchmarking
+</div>
 
 # Profiling and Benchmarking | Find your marble, then start chiseling
 ## Profiling vs Benchmarking
