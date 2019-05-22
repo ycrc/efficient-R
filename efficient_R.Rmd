@@ -1,7 +1,7 @@
 ---
 title: "Writing Efficient R Code"
 author: "Ben Evans & Stephen Weston"
-date: "March 27, 2019"
+date: "May 22, 2019"
 output:
   ioslides_presentation:
     css: styles.css
@@ -16,7 +16,8 @@ institute: YCRC
 ```{r setup, echo=FALSE}     
 library("knitr")
 library("microbenchmark")
-library("ggplot2")
+# R 3.6 whines about ggplot2 in a way that prints to slides
+suppressMessages(library("ggplot2"))
 library("profvis")
 library("compiler")
 opts_chunk$set(comment='', warning=FALSE)
@@ -317,12 +318,31 @@ The `read.table` function is commonly used for reading data files, but it can be
 * The `scan` function can be faster
 * Consider using similar functions, such as `readr`, `data.table`, `sqldf`, and `bigmemory`
 
+## Example csv
+```{bash}
+head -n 3 sample_people.csv
+```
+
+
+## `colClasses` Comparison
+
+Read in 99,999 rows of sample data
+```{r}
+system.time(read.csv('sample_people.csv'))
+system.time(read.csv("sample_people.csv", header=TRUE, colClasses = 
+    c("integer", "character", "character", "integer", "character", "character", 
+      "character", "character", "numeric", "factor", "character")))
+```
+
 ## An alternate universe
 
 ### `readr`
 * Part of [tidyverse](https://www.tidyverse.org)
 * Generally faster than `read.table`
-* Buy in to rest of tidyverse
+``` {r}
+library(readr)
+system.time(read_csv("sample_people.csv"))
+```
 
 ## More alternative libraries
 ### `data.table`
@@ -685,7 +705,7 @@ autoplot(res)
 
 ## Resources
   - This presentation: [github.com/ycrc/efficient-R](https://github.com/ycrc/efficient-R)
-  - R Book: [adv-r.had.co.nz](http://adv-r.had.co.nz)
+  - Advanced R Book: [adv-r.had.co.nz](http://adv-r.had.co.nz)
   - R Manuals: [cran.r-project.org/manuals.html](http://cran.r-project.org/manuals.html)
   - R Inferno: [burns-stat.com/documents/books/the-r-inferno]([http://www.burns-stat.com/documents/books/the-r-inferno])
   - Efficient R programming: [csgillespie.github.io/efficientR](https://csgillespie.github.io/efficientR/index.html)
